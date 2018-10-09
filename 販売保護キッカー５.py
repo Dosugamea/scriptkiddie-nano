@@ -79,6 +79,21 @@ print("success")
 '''
 
 class FuncPs(object):
+    def reTryInvite(self):
+        cl = self.cl
+        gr = cl.getGroup(gid)
+        #DANGEROUS
+        if gr.preventedJoinByTicket == False:
+            Ticket = yukino_1.reissueGroupTicket(gid)
+            for i in bots:
+                i.acceptGroupInvitationByTicket(gid, Ticket)
+        else:
+            groupInfomation.preventedJoinByTicket = False
+            yukino_1.updateGroup(groupInfomation)
+            Ticket = yukino_1.reissueGroupTicket(gid)
+            for i in bots:
+                i.acceptGroupInvitationByTicket(gid, Ticket)
+
     def toggle(self,to,key):
         pass
 
@@ -90,119 +105,87 @@ class OpPs(object):
         
     @tracer.Operation(19)
     def NOTIFIED_KICKOUT_FROM_GROUP(self,cl,op):
-        print(op)
+        gid    = op.param1
+        kicker = op.param2
+        gotban = op.param3
         try:
-            if op.param1 in protect['normalProtect']:
-                if op.param2 in kickerMids:
+            if gid in protect['normalProtect']:
+                #追い出したのがキッカーなら無視
+                if kicker in kickerMids:
                     return
-                elif op.param2 in protect['whiteUsers']:
-                    if op.param3 in kickerMids:
+                #追い出したのがホワイトリストなら
+                elif kicker in protect['whiteUsers']:
+                    #追い出されたのがキッカーなら
+                    if gotban in kickerMids:
                         try:
-                            yukino_1.inviteIntoGroup(op.param1, [op.param3])
-                            if op.param3 in yukino_2Mid:
-                                yukino_2.acceptGroupInvitation(op.param1)
-                            elif op.param3 in yukino_3Mid:
-                                yukino_3.acceptGroupInvitation(op.param1)
+                            cl.inviteIntoGroup(gid, [gotban])
+                            if gotban == yukino_2Mid:
+                                yukino_2.acceptGroupInvitation(gid)
+                            elif gotban in yukino_3Mid:
+                                yukino_3.acceptGroupInvitation(gid)
                         except:
-                            groupInfomation = yukino_1.getGroup(op.param1)
-                            if groupInfomation.preventedJoinByTicket == False:
-                                Ticket = yukino_1.reissueGroupTicket(op.param1)
-                                for i in bots:
-                                    i.acceptGroupInvitationByTicket(op.param1, Ticket)
-                            else:
-                                groupInfomation.preventedJoinByTicket = False
-                                yukino_1.updateGroup(groupInfomation)
-                                Ticket = yukino_1.reissueGroupTicket(op.param1)
-                                for i in bots:
-                                    i.acceptGroupInvitationByTicket(op.param1, Ticket)
-                    elif op.param3 in yukino_1Mid:
-                        Kicker = random.choice(kickers)
+                            self.reTryInvite(self)
+                    #追い出されたのがメイン垢なら
+                    elif gotban == yukino_1Mid:
+                        k = random.choice(kickers)
                         try:
-                            Kicker.inviteIntoGroup(op.param1, [op.param3])
-                            yukino_1.acceptGroupInvitation(op.param1)
+                            k.inviteIntoGroup(gid, [gotban])
+                            cl.acceptGroupInvitation(gid)
                         except:
-                            groupInfomation = yukino_1.getGroup(op.param1)
-                            if groupInfomation.preventedJoinByTicket == False:
-                                Ticket = yukino_1.reissueGroupTicket(op.param1)
-                                for i in bots:
-                                    i.acceptGroupInvitationByTicket(op.param1, Ticket)
-                            else:
-                                groupInfomation.preventedJoinByTicket = False
-                                yukino_1.updateGroup(groupInfomation)
-                                Ticket = yukino_1.reissueGroupTicket(op.param1)
-                                for i in bots:
-                                    i.acceptGroupInvitationByTicket(op.param1, Ticket)
-                elif op.param3 in kickerMids:
+                            self.reTryInvite(self)
+                #追い出されたのがキッカーなら再招待
+                elif gotban in kickerMids:
                     try:
-                        yukino_1.inviteIntoGroup(op.param1, [op.param3])
-                        if op.param3 in yukino_2Mid:
-                            yukino_2.acceptGroupInvitation(op.param1)
-                        elif op.param3 in yukino_3Mid:
-                            yukino_3.acceptGroupInvitation(op.param1)
-                        elif op.param3 in yukino_4Mid:
-                            yukino_4.acceptGroupInvitation(op.param1)
+                        yukino_1.inviteIntoGroup(gid, [gotban])
+                        if  gotban == yukino_2Mid:
+                            yukino_2.acceptGroupInvitation(gid)
+                        elif gotban == yukino_3Mid:
+                            yukino_3.acceptGroupInvitation(gid)
+                        elif gotban == yukino_4Mid:
+                            yukino_4.acceptGroupInvitation(gid)
                         else:
-                            yukino_5.acceptGroupInvitation(op.param1)
+                            yukino_5.acceptGroupInvitation(gid)
                     except:
-                        groupInfomation = yukino_1.getGroup(op.param1)
-                        if groupInfomation.preventedJoinByTicket == False:
-                            Ticket = yukino_1.reissueGroupTicket(op.param1)
-                            for i in bots:
-                                i.acceptGroupInvitationByTicket(op.param1, Ticket)
-                        else:
-                            groupInfomation.preventedJoinByTicket = False
-                            yukino_1.updateGroup(groupInfomation)
-                            Ticket = yukino_1.reissueGroupTicket(op.param1)
-                            for i in bots:
-                                i.acceptGroupInvitationByTicket(op.param1, Ticket)
+                        self.reTryInvite(self)
                     try:
                         Kicker = random.choice(kickers)
-                        Kicker.kickoutFromGroup(op.param1, [op.param2])
+                        Kicker.kickoutFromGroup(gid, [kicker])
                     except:
                         pass
-                    if op.param2 in protect['blackUsers']:
+                    if kicker in protect['blackUsers']:
                         pass
                     else:
-                        protect['blackUsers'][op.param2] = True
+                        protect['blackUsers'][kicker] = True
                         f=codecs.open('./blackUsers.json','w','utf-8')
                         json.dump(protect['blackUsers'], f, sort_keys=True, indent=4,ensure_ascii=False)
-                elif op.param3 in yukino_1Mid:
+                #追い出されたのがメイン垢なら
+                elif gotban == yukino_1Mid:
                     K = random.choice(kickers)
-                    K.kickoutFromGroup(op.param1, [op.param2])
+                    K.kickoutFromGroup(gid, [kicker])
                     try:
-                        K.inviteIntoGroup(op.param1, [op.param3])
-                        yukino_1.acceptGroupInvitation(op.param1)
+                        K.inviteIntoGroup(gid, [gotban])
+                        yukino_1.acceptGroupInvitation(gid)
                     except:
-                        groupInfomation = yukino_2.getGroup(op.param1)
-                        if groupInfomation.preventedJoinByTicket == False:
-                            Ticket = yukino_2.reissueGroupTicket(op.param1)
-                            for i in bots:
-                                i.acceptGroupInvitationByTicket(op.param1, Ticket)
-                        else:
-                            groupInfomation.preventedJoinByTicket = False
-                            yukino_2.updateGroup(groupInfomation)
-                            Ticket = yukino_1.reissueGroupTicket(op.param1)
-                            for i in bots:
-                                i.acceptGroupInvitationByTicket(op.param1, Ticket)
-                    if op.param2 in protect['blackUsers']:
-                        pass
-                    else:
-                        protect['blackUsers'][op.param2] = True
+                        self.reTryInvite(self)
+                    if kicker not in protect['blackUsers']:
+                        protect['blackUsers'][kicker] = True
                         f=codecs.open('./blackUsers.json','w','utf-8')
                         json.dump(protect['blackUsers'], f, sort_keys=True, indent=4,ensure_ascii=False)
+                #追い出されたのが一般アカウントなら
                 else:
+                    #追い出したキッカーを追い出す
                     try:
-                        yukino_3.kickoutFromGroup(op.param1, [op.param2])
+                        yukino_3.kickoutFromGroup(gid, [kicker])
                     except:
                         try:
-                            yukino_2.kickoutFromGroup(op.param1, [op.param2])
+                            yukino_2.kickoutFromGroup(gid, [kicker])
                         except Exception as error:
                             print(error)
-                    yukino_3.inviteIntoGroup(op.param1, [op.param3])
-                    if op.param2 in protect['blackUsers']:
-                        pass
-                    else:
-                        protect['blackUsers'][op.param2] = True
+                    #再招待
+                    yukino_3.inviteIntoGroup(gid, [gotban])
+                    #ブラックリストに登録
+                    if kicker not in protect['blackUsers']:
+                        protect['blackUsers'][kicker] = True
                         f=codecs.open('./blackUsers.json','w','utf-8')
                         json.dump(protect['blackUsers'], f, sort_keys=True, indent=4,ensure_ascii=False)
         except Exception as error:
@@ -337,7 +320,33 @@ class CmdPs(object):
         
     @tracer.Command()
     def ginfo(self,cl,msg):
-        pass
+        group = yukino_1.getGroup(msg.to)
+        md =  "[グループ名]:\n" + group.name + "\n\n"
+        md += "[gid]:\n" + group.id + "\n\n"
+        md += "[アイコン画像]:\n" + "http://dl.profile.line-cdn.net/" + group.pictureStatus + "\n\n"
+        if group.preventedJoinByTicket:
+            md += "\n\n招待URL: 拒否中です\n"
+        else:
+            md += "\n\n招待URL: 許可中です\n"
+        md += "\nメンバー数: " + str(len(group.members)) + "人\n"
+        if group.invitee is None:
+            md += "招待中: 0人\n\n"
+        else
+            md += "招待中: " + str(len(group.invitee)) + "人\n\n"
+        '''
+        if msg.to in protect['normalProtect']: md += "\n\n保護: オン"
+        else: md += "\n\n保護: オフ"
+
+        if msg.to in protect['groupUrl']: md += "\n\n保護 URL: オン"
+        else: md += "\n\n保護 URL: オフ"
+
+        if msg.to in protect['groupName']: md += "\n\n保護 グループ名: オン"
+        else: md += "\n\n保護 グループ名: オフ"
+
+        if msg.to in protect['groupPicture']: md += "\n\n保護 グループ画像: オン"
+        else: md += "\n\n保護 グループ画像: オフ"
+        '''
+        cl.replyMessage(msg, md)
         
     @tracer.Command(permissions=["Admin","White"])
     def addwhite(self,cl,msg):
@@ -556,27 +565,6 @@ class Example(object):
                                 yukino_1.sendMessage(msg.to, "グループurlの保護機能を解除しました。")
                             else:
                                 yukino_1.sendMessage(msg.to, "グループurlの保護機能はすでに無効になっています。")
-                    elif msg.text == "/ginfo":
-                        group = yukino_1.getGroup(msg.to)
-                        md = "[グループ名]: " + group.name + "\n\n[gid]: " + group.id + "\n\n[アイコン画像]: \nhttp://dl.profile.line-cdn.net/" + group.pictureStatus
-                        if group.preventedJoinByTicket is False: md += "\n\n招待URL: 許可中です\n"
-                        else: md += "\n\n招待URL: 拒否中です\n"
-
-                        if group.invitee is None: md += "\nメンバー数: " + str(len(group.members)) + "人\n招待中: 0人"
-                        else: md += "\nメンバー数: " + str(len(group.members)) + "人\n招待中: " + str(len(group.invitee)) + "人"
-
-                        if msg.to in protect['normalProtect']: md += "\n\n保護: オン"
-                        else: md += "\n\n保護: オフ"
-
-                        if msg.to in protect['groupUrl']: md += "\n\n保護 URL: オン"
-                        else: md += "\n\n保護 URL: オフ"
-
-                        if msg.to in protect['groupName']: md += "\n\n保護 グループ名: オン"
-                        else: md += "\n\n保護 グループ名: オフ"
-
-                        if msg.to in protect['groupPicture']: md += "\n\n保護 グループ画像: オン"
-                        else: md += "\n\n保護 グループ画像: オフ"
-                        yukino_1.sendMessage(msg.to, md)
                     elif msg.text == "招待URL拒否":
                         group = yukino_1.getGroup(msg.to)
                         if group.preventedJoinByTicket == True:
