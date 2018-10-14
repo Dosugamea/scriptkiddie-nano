@@ -10,21 +10,14 @@ with open("Tokens.json","r",encoding="utf8") as f:
 with open("Help.txt","r",encoding="utf8") as f:
     helpText = f.read()
 
-with open("authToken.txt","r") as f:
-    yukino_1 = LINE(f.read(),type="IOSIPAD")
-    
-yukino_2 = yukino_3 = yukino_4 = yukino_5 = yukino_1
-
-'''
+yukino_1 = LINE(tokens["Main"],type="IOSIPAD")
 yukino_2 = LINE(tokens["Sub1"],type="IOSIPAD")
 yukino_3 = LINE(tokens["Sub2"],type="IOSIPAD")
 yukino_4 = LINE(tokens["Sub3"],type="IOSIPAD")
 yukino_5 = LINE(tokens["Sub4"],type="IOSIPAD")
-'''
 
 db                 = sqlite3.connect("protect.db", check_same_thread=False)
-tracer             = HooksTracer(yukino_1,prefix=["/","!","?","."],db=db)
-#tracer.generate_db()
+tracer             = HooksTracer(yukino_1,prefix=["／","/","!","?",".","#"],db=db)
 tracer.bots        = [yukino_1, yukino_2, yukino_3, yukino_4, yukino_5]
 tracer.kickers     = [yukino_2, yukino_3, yukino_4, yukino_5]
 tracer.botMids     = [b.getProfile().mid for b in tracer.bots]
@@ -38,95 +31,93 @@ class OpPs(object):
         self.trace(msg,"Content")
     @tracer.Content(0)
     def CONTENT_MESSAGE(self,cl,msg):
+        self.log("[MESSAGE] "+msg.text)
         self.trace(msg,"Command")
         
     @tracer.Operation(19)
     def NOTIFIED_KICKOUT_FROM_GROUP(self,cl,op):
+        self.log("NOTIFIED_KICKOUT_FROM_GROUP")
         gid    = op.param1
         kicker = op.param2
         gotban = op.param3
         try:
-            #保護対象であるなら
-            if gid in protect['normalProtect']:
-                #追い出したのがキッカーまたは ホワイトリストでなければ
-                if kicker not in kickerMids and kicker not in whiteUsers:
-                    pass
-                    #追い出されたのがBotならリストからそれを抜く
-                    #追い出したキッカーを追い出す
-                    #追い出された人を再招待
-                    #ブラックリストに入ってなければ登録
-                #ホワイトリストユーザーがキッカー/メイン垢を追い出してしまったなら
-                if kicker in whiteUsers and gotban in botMids:
-                    pass
-                    #追い出されたBotをリストから抜いて
-                    #再招待
+            if self.getGroup(gid,"normalProtect"):
+                if  kicker not in self.kickerMids\
+                and kicker not in self.getPermissionByName("White")\
+                and kicker not in self.getPermissionByName("Admin"):
+                    self.kk_kick(gid,gotban,kicker)
+                    self.kk_invite(gid,gotban,kicker)
+                elif gotban in self.botMids:
+                    self.kk_invite(gid,gotban,kicker)
         except Exception as error:
             print(error)
         
     @tracer.Operation(13)
     def NOTIFIED_INVITE_INTO_GROUP(self,cl,op):
+        self.log("NOTIFIED_INVITE_INTO_GROUP")
         gid        = op.param1
         inviter    = op.param2
         got_inv    = op.param3
         try:
-            #自分のmid
-            if self.cl.mid in got_inv:
-                #招待者がホワイトリストユーザー または 管理者
-                if inviter in protect['whiteUsers'] or inviter in admins:
-                    #招待受け入れ
-                    cl.acceptGroupInvitation(op.param1)
-                    cl.inviteIntoGroup(op.param1, kickerMids)
-                    for i in bots:
+            if cl.mid in got_inv:
+                if inviter in self.getPermissionByName("White")\
+                or inviter in self.getPermissionByName("Admin"):
+                    cl.acceptGroupInvitation(gid)
+                    for k in self.kickers:
                         try:
-                            i.acceptGroupInvitation(op.param1)
+                            cl.inviteIntoGroup(gid, k.mid)
+                            k.acceptGroupInvitation(gid)
                         except:
                             pass
-                    cl.sendMessage(op.param1,"Hello! I'm group protect bot.\nYou can check my commands by '/help'♪")
-            #招待保護中なら
-            elif gid in protect['normalProtect']:
-                gotinvs = op.param3.replace("",',').split(",")
-                bl_usrs = [u for u in gotinvs if u in protect['blackUsers']]
-                for b in bl_usrs:
-                    cl.cancelGroupInvitation(op.param1, bl_usrs)
+                    cl.sendMessage(op.param1,"こんにちは! 私はグループ保護Botです。\nコマンド一覧は '/ヘルプ' で確認できます。")
+            elif self.getGroup(gid,"normalProtect")\
+            and (inviter not in self.getPermissionByName("White")\
+                 or inviter in self.getPermissionByName("Admin")):
+                gotinvs = got_inv.split("")
+                for b in gotinvs:
+                    cl.cancelGroupInvitation(gid, b)
         except Exception as error:
             print(error)
 
     @tracer.Operation(11)
     def NOTIFIED_UPDATE_GROUP(self,cl,op):
+        self.log("NOTIFIED_UPDATE_GROUP")
         gid = op.param1
         usr = op.param2
         ctp = op.param3
-        """
-        ctp
-        1: グループ名
-        2: グル画像
-        4: URL状態
-        """
         try:
             #グループ名変更
             if ctp == "1":
-                if gid in protect['groupName']:
-                    if usr not in botMids:
-                        gr = cl.getGroup(gid)
-                        gr.name = protect['groupName'][gid]
+                gr = cl.getGroup(gid)
+                if self.getGroup(gid,"protectGroupName"):
+                    if  usr not in self.botMids\
+                    and usr not in self.getPermissionByName("White")\
+                    and usr not in self.getPermissionByName("Admin"):
+                        gr.name = self.getGroup(gid,"groupName")
                         cl.updateGroup(gr)
+                self.postGroup(gid,"groupName",gr.name)
             #グループ画変更
             elif ctp == "2":
-                if gid in protect['groupPicture']:
-                    if usr not in botMids:
-                        imagePath = "./" + protect['groupPicture'][gid]
-                        cl.updateGroupPicture(gid, imagePath)
+                if self.getGroup(gid,"protectGroupImage"):
+                    if  usr not in self.botMids\
+                    and usr not in self.getPermissionByName("White")\
+                    and usr not in self.getPermissionByName("Admin"):
+                        cl.updateGroupPicture(gid,"./%s.jpg"%(gid))
             #グループURL変更
             elif ctp == "4":
-                if gid in protect['groupUrl']:
-                    if usr not in botMids:
+                if self.getGroup(gid,"protectGroupUrl"):
+                    if  usr not in self.botMids\
+                    and usr not in self.getPermissionByName("White")\
+                    and usr not in self.getPermissionByName("Admin"):
                         gr = cl.getGroup(gid)
-                        gr.preventedJoinByTicket = True
+                        if gr.preventedJoinByTicket:
+                            gr.preventedJoinByTicket = False
+                        else:
+                            gr.preventedJoinByTicket = True
                         cl.updateGroup(gr)
-                        if usr not in protect['blackUsers']:
-                            protect['blackUsers'][usr] = True
-                            f=codecs.open('./blackUsers.json','w','utf-8')
-                            json.dump(protect['blackUsers'], f, sort_keys=True, indent=4,ensure_ascii=False)
+                        self.kk_kick(gid,None,usr)
+            else:
+                print(ctp)
         except Exception as error:
             print(error)
 
@@ -161,9 +152,9 @@ class CmdPs(object):
         md += "[アイコン画像]:\n"+"http://dl.profile.line-cdn.net/"
         md += group.pictureStatus+"\n"
         if group.preventedJoinByTicket:
-            md += "招待URL: 拒否\n"
+            md += "招待URLから参加: 拒否\n"
         else:
-            md += "招待URL: 許可\n"
+            md += "招待URLから参加: 許可\n"
         md += "メンバー数: " + str(len(group.members)) + "人\n"
         if group.invitee is None:
             md += "招待中: 0人\n"
@@ -174,14 +165,14 @@ class CmdPs(object):
         else:
             md += "保護: オフ\n"
         if self.getGroup(msg.to,"protectGroupUrl"):
-            md += "保護 URL: オン\n"
+            md += "保護URL: オン\n"
         else:
-            md += "保護 URL: オフ\n"
+            md += "保護URL: オフ\n"
         if self.getGroup(msg.to,"protectGroupName"):
-            md += "保護 グループ名: オン\n"
+            md += "保護グル名: オン\n"
         else:
-            md += "保護 グループ名: オフ\n"
-        if self.getGroup(msg.to,"protectGroupPicture"):
+            md += "保護グル名: オフ\n"
+        if self.getGroup(msg.to,"protectGroupImage"):
             md += "保護 グループ画像: オン\n"
         else:
             md += "保護 グループ画像: オフ\n"
@@ -229,7 +220,7 @@ class CmdPs(object):
         else:
             cl.replyMessage(msg, "保護機能はすでに無効になっています。")
             
-    @tracer.Command(sources=["Group"],permissions=["Admin","White"])
+    @tracer.Command(alt=["保護グル名オン"],sources=["Group"],permissions=["Admin","White"])
     def 保護名前オン(self,cl,msg):
         if not self.getGroup(msg.to,"protectGroupName"):
             self.postGroup(msg.to,'protectGroupName',True)
@@ -238,7 +229,7 @@ class CmdPs(object):
         else:
             cl.replyMessage(msg, "グループ名の保護機能はすでに有効になっています。")
             
-    @tracer.Command(sources=["Group"],permissions=["Admin","White"])
+    @tracer.Command(alt=["保護グル名オフ"],sources=["Group"],permissions=["Admin","White"])
     def 保護名前オフ(self,cl,msg):
         if self.getGroup(msg.to,"protectGroupName"):
             self.postGroup(msg.to,'protectGroupName',False)
@@ -246,7 +237,7 @@ class CmdPs(object):
         else:
             cl.replyMessage(msg, "グループ名の保護機能はすでに無効になっています。")
         
-    @tracer.Command(sources=["Group"],permissions=["Admin","White"])
+    @tracer.Command(alt=["保護グル画オン"],sources=["Group"],permissions=["Admin","White"])
     def 保護画像オン(self,cl,msg):
         if not self.getGroup(msg.to,"protectGroupImage"):
             gp = cl.getGroup(msg.to).pictureStatus
@@ -258,7 +249,7 @@ class CmdPs(object):
         else:
             cl.replyMessage(msg, "グループ画像の保護機能はすでに有効になっています。")
         
-    @tracer.Command(sources=["Group"],permissions=["Admin","White"])
+    @tracer.Command(alt=["保護グル画オフ"],sources=["Group"],permissions=["Admin","White"])
     def 保護画像オフ(self,cl,msg):
         if self.getGroup(msg.to,"protectGroupImage"):
             self.postGroup(msg.to,"protectGroupImage",False)
@@ -296,7 +287,7 @@ class CmdPs(object):
     def 招待URL拒否(self,cl,msg):
         gr = cl.getGroup(msg.to)
         if not gr.preventedJoinByTicket:
-            gr.preventedJoinByTicket = Trues
+            gr.preventedJoinByTicket = True
             cl.updateGroup(gr)
             cl.replyMessage(msg, "招待URLからの参加を拒否にしました。")
         else:
@@ -316,40 +307,7 @@ class AdminCmdPs(object):
         with open("temp.txt","r") as r:
             cl.replyMessage(msg,r.read())
 
-    @tracer.Command(inpart=True,permissions=["Admin"])
-    def givePermission(self,cl,msg):
-        users = self.getMention(msg.contentMetadata)
-        args  = self.getArg(["givepermission"],msg.text,True)
-        if users == []:
-            self.cl.replyMessage(msg,"You must mention users to give.")
-            return
-        if args == []:
-            self.cl.replyMessage(msg,"You must specify permissions to give.")
-            return
-        arg = args[0]
-        users = list(set(users))
-        for u in users:
-            self.addPermission(u,[arg])
-        usrt = "\n".join([cl.getContact(u).displayName for u in users])
-        self.cl.replyMessage(msg,"Gave permission 「%s」 to below users.\n\n%s"%(arg,usrt))
-        
-    @tracer.Command(inpart=True,permissions=["Admin"])
-    def takePermission(self,cl,msg):
-        users = self.getMention(msg.contentMetadata)
-        args  = self.getArg(["takepermission"],msg.text,True)
-        if users == []:
-            self.cl.replyMessage(msg,"You must mention users to give.")
-            return
-        if args == []:
-            self.cl.replyMessage(msg,"You must specify permissions to give.")
-            return
-        arg = args[0]
-        users = list(set(users))
-        for u in users:
-            self.removePermission(u,[arg])
-        usrt = "\n".join([cl.getContact(u).displayName for u in users])
-        self.cl.replyMessage(msg,"Removed permission 「%s」 from below users.\n\n%s"%(arg,usrt))
-
+tracer.addClass(FuncPs())
 tracer.addClass(OpPs())
 tracer.addClass(CmdPs())
 tracer.addClass(AdminCmdPs())
