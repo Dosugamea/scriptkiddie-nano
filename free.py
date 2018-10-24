@@ -1,14 +1,11 @@
 # coding:utf-8
 from LineApi import *
 from LineApi import HooksTracer
-import random, requests, shutil, codecs, json, random, os
+import random, requests, shutil, codecs, json, random, os, requests
 
 with open("Tokens.json","r") as f:
     tokens = json.loads(f.read())
-    
-yukino_1 = LINE(tokens["Main"],type="IOSIPAD")
-yukino_2 = LINE(tokens["Sub1"],type="IOSIPAD")
-yukino_3 = LINE(tokens["Sub2"],type="IOSIPAD")
+yukino_1 = LINE(tokens["Free"],type="IOSIPAD")
 
 '''
 with open("Help.txt","r",encoding="utf8") as f:
@@ -30,12 +27,7 @@ helptext = [
 helpText = "\n".join(helpText)          
 db                 = sqlite3.connect("free_protect.db", check_same_thread=False)
 tracer             = HooksTracer(yukino_1,prefix=["／","/","!","?",".","#"],db=db)
-tracer.bots        = [yukino_1, yukino_2, yukino_3]
-tracer.kickers     = [yukino_2, yukino_3]
-tracer.botMids     = [b.getProfile().mid for b in tracer.bots]
-tracer.kickerMids  = [k.getProfile().mid for k in tracer.kickers]
 tracer.helptext    = helpText
-profile = yukino_1.getProfile()
 
 class OpPs(object):
     @tracer.Operation(26)
@@ -54,16 +46,29 @@ class OpPs(object):
         gid = op.param1
         usr = op.param2
         ctp = op.param3
-        if usr != self.getGroup(gid,"Admin"):
-            #Name
-            if ctp == 1:
-                gr = cl.getGroup(gid)
-                grName = self.getGroup(gid,"OldName")
-            #Picture
-            elif ctp == 2:
-                pass
-            #UrlPrevent
-            elif ctp == 4:
+        gr = cl.getGroup(gid)
+        if self.getGroup(msg.to,"Protect"):
+            try:
+                if usr != self.getGroup(gid,"Admin"):
+                    if ctp == 1:
+                        gr.name = self.getGroup(gid,"OldName")
+                        cl.updateGroup(gr)
+                    elif ctp == 2:
+                        cl.updateGroupPicture(gid, gid+".jpg")
+                    elif ctp == 4:
+                        if gr.preventedJoinByTicket:
+                            gr.preventedJoinByTicket = False
+                        else:
+                            gr.preventedJoinByTicket = True
+                        cl.updateGroup(gr)
+                else:
+                    if ctp == 1:
+                        self.postGroup(gid,"OldName",gr.name)
+                    elif ctp == 2:
+                        resp = requests.get("http://dl.profile.line-cdn.net/"+gr.pictureStatus)
+                        with open(gid+".jpg","wb") as f:
+                            f.write(resp.content)
+            except:
                 pass
 
     @tracer.Operation(13)
@@ -76,7 +81,6 @@ class OpPs(object):
             cl.acceptGroupInvitation(gid)
             self.postGroup(gid,"Admin",inviter)
             cl.sendMessage(gid,"招待ありがとうございます!\n私は単独保護Botです!\nヘルプの確認には\n「!help」\nと言ってください♪")
-            #リスト化するとDBにぶち込むのが非常にめんどくさいのでとりあえず招待者のみをサポートする
         
     @tracer.Operation(15)
     def NOTIFIED_LEAVE_GROUP(self,cl,op):
@@ -92,9 +96,12 @@ class OpPs(object):
         gid    = op.param1
         kicker = op.param2
         gotban = op.param3
-        if kicker != self.getGroup(gid,"Admin"):
-            cl.kickoutFromGroup(gid,kicker)
-            cl.inviteIntoGroup(gid,[gotban])
+        if self.getGroup(msg.to,"Protect") and kicker != self.getGroup(gid,"Admin"):
+            try:
+                cl.kickoutFromGroup(gid,kicker)
+                cl.inviteIntoGroup(gid,[gotban])
+            except:
+                pass
 
 class CmdPs(object):
     @tracer.Command(alt=["ヘルプ"])
@@ -125,7 +132,11 @@ class CmdPs(object):
     def 保護_オン(self,cl,msg):
         if msg._from == self.getGroup("Admin"):
             if not self.getGroup(msg.to,"Protect"):
+                gr = cl.getGroup(msg.to)
                 self.postGroup(msg.to,"Protect",1)
+                self.postGroup(msg.to,"OldName",gr.name)
+                with open(msg.to+".jpg","wb") as f:
+                        f.write(requests.get("http://dl.profile.line-cdn.net/"+gr.pictureStatus).content)
                 cl.replyMessage(msg,"保護状態を有効に切り替えました")
             else:
                 cl.replyMessage(msg,"保護は既に有効になっています")
